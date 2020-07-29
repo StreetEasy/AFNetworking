@@ -92,33 +92,36 @@
 }
 
 - (void)testThatRedirectBlockIsCalledWhen302IsEncountered {
-    __block BOOL success;
-    __block NSError *blockError = nil;
-
-    XCTestExpectation *expectation = [self expectationWithDescription:@"Request should succeed"];
-
-    NSURLRequest *redirectRequest = [NSURLRequest requestWithURL:[NSURL URLWithString:@"/redirect/1" relativeToURL:self.baseURL]];
-    NSURLSessionDataTask *redirectTask = [self.sessionManager dataTaskWithRequest:redirectRequest uploadProgress:nil downloadProgress:nil
-                                                         completionHandler:^(NSURLResponse *response, id responseObject, NSError *error) {
-        blockError = error;
-        [expectation fulfill];
-    }];
-
-    [self.sessionManager setTaskWillPerformHTTPRedirectionBlock:^NSURLRequest *(NSURLSession *session, NSURLSessionTask *task, NSURLResponse *response, NSURLRequest *request) {
-        if (response) {
-            success = YES;
-        }
-
-        return request;
-    }];
-
-    [redirectTask resume];
-
-    [self waitForExpectationsWithTimeout:10.0 handler:nil];
-
-    XCTAssertTrue(redirectTask.state == NSURLSessionTaskStateCompleted);
-    XCTAssertNil(blockError);
-    XCTAssertTrue(success);
+    // This test fails due to an error with HTTPBin.
+    // Issue: https://github.com/postmanlabs/httpbin/issues/617
+    // This test currently fails on AFNetworking's main branch as well
+//    __block BOOL success;
+//    __block NSError *blockError = nil;
+//
+//    XCTestExpectation *expectation = [self expectationWithDescription:@"Request should succeed"];
+//
+//    NSURLRequest *redirectRequest = [NSURLRequest requestWithURL:[NSURL URLWithString:@"/redirect/1" relativeToURL:self.baseURL]];
+//    NSURLSessionDataTask *redirectTask = [self.sessionManager dataTaskWithRequest:redirectRequest uploadProgress:nil downloadProgress:nil
+//                                                         completionHandler:^(NSURLResponse *response, id responseObject, NSError *error) {
+//        blockError = error;
+//        [expectation fulfill];
+//    }];
+//
+//    [self.sessionManager setTaskWillPerformHTTPRedirectionBlock:^NSURLRequest *(NSURLSession *session, NSURLSessionTask *task, NSURLResponse *response, NSURLRequest *request) {
+//        if (response) {
+//            success = YES;
+//        }
+//
+//        return request;
+//    }];
+//
+//    [redirectTask resume];
+//
+//    [self waitForExpectationsWithTimeout:10.0 handler:nil];
+//
+//    XCTAssertTrue(redirectTask.state == NSURLSessionTaskStateCompleted);
+//    XCTAssertNil(blockError);
+//    XCTAssertTrue(success);
 }
 
 - (void)testDownloadFileCompletionSpecifiesURLInCompletionWithManagerDidFinishBlock {
