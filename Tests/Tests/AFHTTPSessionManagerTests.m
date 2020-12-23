@@ -28,6 +28,12 @@
 @property (readwrite, nonatomic, strong) AFHTTPSessionManager *sessionManager;
 @end
 
+@interface AFURLSessionManager (Testing)
+
+- (nonnull NSError *)serverTrustErrorForServerTrust:(SecTrustRef)serverTrust url:(NSURL *)url;
+
+@end
+
 @implementation AFHTTPSessionManagerTests
 
 - (void)setUp {
@@ -92,36 +98,33 @@
 }
 
 - (void)testThatRedirectBlockIsCalledWhen302IsEncountered {
-    // This test fails due to an error with HTTPBin.
-    // Issue: https://github.com/postmanlabs/httpbin/issues/617
-    // This test currently fails on AFNetworking's main branch as well
-//    __block BOOL success;
-//    __block NSError *blockError = nil;
-//
-//    XCTestExpectation *expectation = [self expectationWithDescription:@"Request should succeed"];
-//
-//    NSURLRequest *redirectRequest = [NSURLRequest requestWithURL:[NSURL URLWithString:@"/redirect/1" relativeToURL:self.baseURL]];
-//    NSURLSessionDataTask *redirectTask = [self.sessionManager dataTaskWithRequest:redirectRequest uploadProgress:nil downloadProgress:nil
-//                                                         completionHandler:^(NSURLResponse *response, id responseObject, NSError *error) {
-//        blockError = error;
-//        [expectation fulfill];
-//    }];
-//
-//    [self.sessionManager setTaskWillPerformHTTPRedirectionBlock:^NSURLRequest *(NSURLSession *session, NSURLSessionTask *task, NSURLResponse *response, NSURLRequest *request) {
-//        if (response) {
-//            success = YES;
-//        }
-//
-//        return request;
-//    }];
-//
-//    [redirectTask resume];
-//
-//    [self waitForExpectationsWithTimeout:10.0 handler:nil];
-//
-//    XCTAssertTrue(redirectTask.state == NSURLSessionTaskStateCompleted);
-//    XCTAssertNil(blockError);
-//    XCTAssertTrue(success);
+    __block BOOL success;
+    __block NSError *blockError = nil;
+
+    XCTestExpectation *expectation = [self expectationWithDescription:@"Request should succeed"];
+
+    NSURLRequest *redirectRequest = [NSURLRequest requestWithURL:[NSURL URLWithString:@"https://httpbingo.org/redirect/1"]];
+    NSURLSessionDataTask *redirectTask = [self.sessionManager dataTaskWithRequest:redirectRequest uploadProgress:nil downloadProgress:nil
+                                                         completionHandler:^(NSURLResponse *response, id responseObject, NSError *error) {
+        blockError = error;
+        [expectation fulfill];
+    }];
+
+    [self.sessionManager setTaskWillPerformHTTPRedirectionBlock:^NSURLRequest *(NSURLSession *session, NSURLSessionTask *task, NSURLResponse *response, NSURLRequest *request) {
+        if (response) {
+            success = YES;
+        }
+
+        return request;
+    }];
+
+    [redirectTask resume];
+
+    [self waitForExpectationsWithTimeout:10.0 handler:nil];
+
+    XCTAssertTrue(redirectTask.state == NSURLSessionTaskStateCompleted);
+    XCTAssertNil(blockError);
+    XCTAssertTrue(success);
 }
 
 - (void)testDownloadFileCompletionSpecifiesURLInCompletionWithManagerDidFinishBlock {
@@ -203,6 +206,33 @@
     [self waitForExpectationsWithTimeout:10.0 handler:nil];
 }
 
+- (void)testSettingHTTPHeadersPerRequestCanReplaceTheDefaultValueSpecifiedInRequestSerializer {
+    XCTestExpectation *expectation = [self expectationWithDescription:@"Request should succeed"];
+
+    [self.sessionManager.requestSerializer setValue:@"foo value"
+                                 forHTTPHeaderField:@"X-Foo"];
+    [self.sessionManager.requestSerializer setValue:@"bar value"
+                                 forHTTPHeaderField:@"X-Bar"];
+
+    NSURLSessionDataTask *testTask =
+        [self.sessionManager dataTaskWithHTTPMethod:@"GET"
+                                          URLString:@"get"
+                                         parameters:nil
+                                            headers:@{ @"X-Foo": @"request value" }
+                                     uploadProgress:nil
+                                   downloadProgress:nil
+                                            success:^(NSURLSessionDataTask * _Nonnull task, id _Nullable responseObject) {
+        XCTAssertTrue([task.originalRequest.allHTTPHeaderFields[@"X-Foo"] isEqualToString:@"request value"]);
+        XCTAssertTrue([task.originalRequest.allHTTPHeaderFields[@"X-Bar"] isEqualToString:@"bar value"]);
+        [expectation fulfill];
+    }
+                                            failure:nil];
+
+    [testTask resume];
+
+    [self waitForExpectationsWithCommonTimeout];
+}
+
 #pragma mark - NSCoding
 
 - (void)testSupportsSecureCoding {
@@ -225,7 +255,7 @@
     XCTAssertNotNil(newManager.session.configuration);
 }
 
-#pragma mark - NSCopying 
+#pragma mark - NSCopying
 
 - (void)testCanBeCopied {
     AFHTTPSessionManager *copyManager = [self.sessionManager copy];
@@ -344,7 +374,7 @@
     XCTAssertNil(urlResponseObject);
 }
 
-#pragma mark - Rest Interface 
+#pragma mark - Rest Interface
 
 - (void)testGET {
     XCTestExpectation *expectation = [self expectationWithDescription:@"Request should succeed"];
@@ -377,6 +407,8 @@
 
 - (void)testPOST {
     XCTestExpectation *expectation = [self expectationWithDescription:@"Request should succeed"];
+    [self.sessionManager.requestSerializer setValue:@"default value"
+                                 forHTTPHeaderField:@"field"];
     [self.sessionManager
      POST:@"post"
      parameters:@{@"key":@"value"}
@@ -393,6 +425,8 @@
 
 - (void)testPOSTWithConstructingBody {
     XCTestExpectation *expectation = [self expectationWithDescription:@"Request should succeed"];
+    [self.sessionManager.requestSerializer setValue:@"default value"
+                                 forHTTPHeaderField:@"field"];
     [self.sessionManager
      POST:@"post"
      parameters:@{@"key":@"value"}
@@ -416,6 +450,8 @@
 
 - (void)testPUT {
     XCTestExpectation *expectation = [self expectationWithDescription:@"Request should succeed"];
+    [self.sessionManager.requestSerializer setValue:@"default value"
+                                 forHTTPHeaderField:@"field"];
     [self.sessionManager
      PUT:@"put"
      parameters:@{@"key":@"value"}
@@ -431,6 +467,8 @@
 
 - (void)testDELETE {
     XCTestExpectation *expectation = [self expectationWithDescription:@"Request should succeed"];
+    [self.sessionManager.requestSerializer setValue:@"default value"
+                                 forHTTPHeaderField:@"field"];
     [self.sessionManager
      DELETE:@"delete"
      parameters:@{@"key":@"value"}
@@ -446,6 +484,8 @@
 
 - (void)testPATCH {
     XCTestExpectation *expectation = [self expectationWithDescription:@"Request should succeed"];
+    [self.sessionManager.requestSerializer setValue:@"default value"
+                                 forHTTPHeaderField:@"field"];
     [self.sessionManager
      PATCH:@"patch"
      parameters:@{@"key":@"value"}
@@ -607,6 +647,48 @@
          [expectation fulfill];
      }];
     [self waitForExpectationsWithCommonTimeoutUsingHandler:nil];
+}
+
+- (void)testThatServerTrustErrorIsCreatedWithProperUserInfoWithAllParameters {
+    NSURL *url = [NSURL URLWithString:@"https://httpbin.org/get"];
+    SecTrustRef trust = AFUTTrustChainForCertsInDirectory([[[NSBundle bundleForClass:[self class]] resourcePath]
+                                                           stringByAppendingPathComponent:@"HTTPBinOrgServerTrustChain"]);
+    NSError *error = [self.sessionManager serverTrustErrorForServerTrust:trust url:url];
+
+    XCTAssertNotNil(error);
+    XCTAssertNotNil(error.userInfo[NSURLErrorFailingURLPeerTrustErrorKey]);
+    XCTAssertEqual(error.userInfo[NSURLErrorFailingURLErrorKey], url);
+    XCTAssertEqual(error.userInfo[NSURLErrorFailingURLStringErrorKey], url.absoluteString);
+}
+
+- (void)testThatServerTrustErrorIsCreatedWithProperUserInfoWhenTrustIsNil {
+    NSURL *url = [NSURL URLWithString:@"https://httpbin.org/get"];
+    NSError *error = [self.sessionManager serverTrustErrorForServerTrust:nil url:url];
+
+    XCTAssertNotNil(error);
+    XCTAssertNil(error.userInfo[NSURLErrorFailingURLPeerTrustErrorKey]);
+    XCTAssertEqual(error.userInfo[NSURLErrorFailingURLErrorKey], url);
+    XCTAssertEqual(error.userInfo[NSURLErrorFailingURLStringErrorKey], url.absoluteString);
+}
+
+- (void)testThatServerTrustErrorIsCreatedWithProperUserInfoWhenURLIsNil {
+    SecTrustRef trust = AFUTTrustChainForCertsInDirectory([[[NSBundle bundleForClass:[self class]] resourcePath]
+                                                           stringByAppendingPathComponent:@"HTTPBinOrgServerTrustChain"]);
+    NSError *error = [self.sessionManager serverTrustErrorForServerTrust:trust url:nil];
+
+    XCTAssertNotNil(error);
+    XCTAssertNotNil(error.userInfo[NSURLErrorFailingURLPeerTrustErrorKey]);
+    XCTAssertNil(error.userInfo[NSURLErrorFailingURLErrorKey]);
+    XCTAssertNil(error.userInfo[NSURLErrorFailingURLStringErrorKey]);
+}
+
+- (void)testThatServerTrustErrorIsCreatedWithProperUserInfoAllParametersAreNil {
+    NSError *error = [self.sessionManager serverTrustErrorForServerTrust:nil url:nil];
+
+    XCTAssertNotNil(error);
+    XCTAssertNil(error.userInfo[NSURLErrorFailingURLPeerTrustErrorKey]);
+    XCTAssertNil(error.userInfo[NSURLErrorFailingURLErrorKey]);
+    XCTAssertNil(error.userInfo[NSURLErrorFailingURLStringErrorKey]);
 }
 
 @end
